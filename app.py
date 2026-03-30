@@ -1,3 +1,6 @@
+import streamlit as st
+import pandas as pd
+import joblib
 
 # 1. Configuração da Página
 st.set_page_config(page_title="Altamente Prisma", page_icon="🧩", layout="wide")
