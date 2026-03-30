@@ -8,7 +8,6 @@ st.set_page_config(page_title="Altamente Prisma", page_icon="🧩", layout="wide
 # 2. Carregamento de Dados (com cache)
 @st.cache_resource
 def carregar_arquivos():
-    # Certifique-se que os nomes dos arquivos no GitHub são exatamente estes
     modelo = joblib.load('modelo_prisma_final.pkl')
     df_dict = pd.read_csv('prisma_5_dicionario.csv')
     return modelo, df_dict
@@ -24,7 +23,10 @@ st.divider()
 col_dados, col_resultados = st.columns([1, 2], gap="large")
 
 with col_dados:
-    st.subheader("📋 Inserir Dados do Estudante")
+    st.subheader("📋 Identificação e Avaliação")
+    
+    # NOVIDADE: Campo para o nome do estudante
+    nome_estudante = st.text_input("Nome Completo do Estudante", placeholder="Ex: Lucas Oliveira")
     
     with st.expander("📚 Desempenho Acadêmico (1-10)", expanded=True):
         leitura = st.slider("Leitura", 1, 10, 5)
@@ -55,82 +57,68 @@ with col_dados:
 
 with col_resultados:
     if gerar:
-        # --- 5. ENGENHARIA DE FEATURES EM TEMPO REAL ---
-        # Criamos o dicionário com os 18 inputs originais
-        inputs = {
-            'idade': 10, 
-            'perf_leitura': leitura, 
-            'perf_matematica': matematica, 
-            'perf_escrita': escrita, 
-            'desempenho_acima_media': acima_media, 
-            'abertura_novo': abertura, 
-            'organizacao': org, 
-            'interacao_social': social, 
-            'amabilidade': amabilidade, 
-            'estabilidade_emocional': emocional, 
-            'foco_sustentado': foco, 
-            'reatividade_sensorial': sensorial, 
-            'coord_motora_fina': motora, 
-            'comunicacao_nao_verbal': nao_verbal, 
-            'pref_visual': p_visual, 
-            'pref_auditiva': p_auditiva, 
-            'pref_cinestesica': p_cinestesica, 
-            'ambiente_preferencial': ambiente
-        }
+        # Validação: Impedir análise sem nome
+        if not nome_estudante:
+            st.warning("⚠️ Por favor, insira o nome do estudante antes de realizar a análise.")
+        else:
+            # --- 5. ENGENHARIA DE FEATURES ---
+            inputs = {
+                'idade': 10, 'perf_leitura': leitura, 'perf_matematica': matematica, 'perf_escrita': escrita, 
+                'desempenho_acima_media': acima_media, 'abertura_novo': abertura, 'organizacao': org, 
+                'interacao_social': social, 'amabilidade': amabilidade, 'estabilidade_emocional': emocional, 
+                'foco_sustentado': foco, 'reatividade_sensorial': sensorial, 'coord_motora_fina': motora, 
+                'comunicacao_nao_verbal': nao_verbal, 'pref_visual': p_visual, 'pref_auditiva': p_auditiva, 
+                'pref_cinestesica': p_cinestesica, 'ambiente_preferencial': ambiente
+            }
 
-        # Calculamos as 3 colunas que o modelo exige (Engenharia de Features)
-        inputs['indice_assimetria'] = matematica - leitura
-        inputs['carga_estresse_sensorial'] = sensorial / (foco if foco > 0 else 1)
-        inputs['potencial_criativo'] = abertura + acima_media
+            inputs['indice_assimetria'] = matematica - leitura
+            inputs['carga_estresse_sensorial'] = sensorial / (foco if foco > 0 else 1)
+            inputs['potencial_criativo'] = abertura + acima_media
 
-        # Transformamos em DataFrame
-        dados_entrada = pd.DataFrame([inputs])
+            dados_entrada = pd.DataFrame([inputs])
+            colunas_ordem_treino = [
+                'idade', 'perf_leitura', 'perf_matematica', 'perf_escrita', 
+                'desempenho_acima_media', 'abertura_novo', 'organizacao', 
+                'interacao_social', 'amabilidade', 'estabilidade_emocional', 
+                'foco_sustentado', 'reatividade_sensorial', 'coord_motora_fina', 
+                'comunicacao_nao_verbal', 'pref_visual', 'pref_auditiva', 
+                'pref_cinestesica', 'ambiente_preferencial',
+                'indice_assimetria', 'carga_estresse_sensorial', 'potencial_criativo'
+            ]
+            dados_entrada = dados_entrada[colunas_ordem_treino]
 
-        # REORDENAMOS para garantir que as 21 colunas estejam na ordem exata do treino
-        colunas_ordem_treino = [
-            'idade', 'perf_leitura', 'perf_matematica', 'perf_escrita', 
-            'desempenho_acima_media', 'abertura_novo', 'organizacao', 
-            'interacao_social', 'amabilidade', 'estabilidade_emocional', 
-            'foco_sustentado', 'reatividade_sensorial', 'coord_motora_fina', 
-            'comunicacao_nao_verbal', 'pref_visual', 'pref_auditiva', 
-            'pref_cinestesica', 'ambiente_preferencial',
-            'indice_assimetria', 'carga_estresse_sensorial', 'potencial_criativo'
-        ]
-        dados_entrada = dados_entrada[colunas_ordem_treino]
+            try:
+                perfil = modelo.predict(dados_entrada)[0]
+                recomendas = df_dict[df_dict['perfil'] == perfil].iloc[0]
+                
+                # --- EXIBIÇÃO PERSONALIZADA ---
+                st.subheader(f"🔍 Relatório de Triagem: {nome_estudante}")
+                st.info(f"O modelo identificou que **{nome_estudante}** apresenta padrões compatíveis com o perfil: **{perfil}**")
+                
+                st.markdown(f"### 💡 Plano de Intervenção Recomendado para {nome_estudante}")
+                c1, c2, c3 = st.columns(3)
+                c1.success(f"**Estratégia 1:**\n\n{recomendas['rec_1']}")
+                c2.warning(f"**Estratégia 2:**\n\n{recomendas['rec_2']}")
+                c3.error(f"**Estratégia 3:**\n\n{recomendas['rec_3']}")
 
-        try:
-            # Predição e busca no dicionário
-            perfil = modelo.predict(dados_entrada)[0]
-            recomendas = df_dict[df_dict['perfil'] == perfil].iloc[0]
-            
-            # Exibição do Diagnóstico
-            st.subheader("🔍 Resultado da Triagem")
-            st.info(f"O modelo identificou padrões compatíveis com o perfil: **{perfil}**")
-            
-            st.markdown("### 💡 Plano de Intervenção Recomendado")
-            c1, c2, c3 = st.columns(3)
-            c1.success(f"**Estratégia 1:**\n\n{recomendas['rec_1']}")
-            c2.warning(f"**Estratégia 2:**\n\n{recomendas['rec_2']}")
-            c3.error(f"**Estratégia 3:**\n\n{recomendas['rec_3']}")
+                st.divider()
+                
+                # --- FEEDBACK INTERATIVO NOMINAL ---
+                st.subheader("📝 Validação do Especialista")
+                st.write(f"De acordo com sua percepção, o diagnóstico para **{nome_estudante}** está correto?")
+                
+                f1, f2, f3 = st.columns(3)
+                if f1.button("👍 Sim, concordo"):
+                    st.toast(f"Feedback para {nome_estudante} registrado com sucesso!")
+                if f2.button("👎 Não concordo"):
+                    st.toast(f"Alerta de divergência para {nome_estudante} enviado para revisão.")
+                
+                obs = st.text_area(f"Observações sobre o comportamento de {nome_estudante}:", placeholder="Adicione detalhes observados em sala...")
+                if st.button("Salvar no Prontuário"):
+                    st.success(f"As informações de {nome_estudante} foram arquivadas.")
 
-            st.divider()
-            
-            # --- MÓDULO DE FEEDBACK INTERATIVO ---
-            st.subheader("📝 Validação do Especialista")
-            st.write("Este diagnóstico faz sentido de acordo com a sua observação?")
-            
-            f1, f2, f3 = st.columns(3)
-            if f1.button("👍 Sim, concordo"):
-                st.toast("Feedback registrado! Isso ajuda a calibrar nossa IA.")
-            if f2.button("👎 Não, parece impreciso"):
-                st.toast("Sinalizado para revisão manual.")
-            
-            st.text_area("Observações adicionais (opcional):", placeholder="Ex: Hiperfoco em tecnologia...")
-            if st.button("Salvar Observação"):
-                st.success("Anotação salva com sucesso!")
-
-        except Exception as e:
-            st.error(f"Erro na análise: {e}")
+            except Exception as e:
+                st.error(f"Erro na análise: {e}")
 
     else:
-        st.write("👈 Ajuste os indicadores do estudante ao lado e clique em **Analisar Perfil**.")
+        st.write("👈 Insira o nome do aluno e ajuste os indicadores para gerar o diagnóstico.")
